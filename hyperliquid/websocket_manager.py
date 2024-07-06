@@ -8,8 +8,14 @@ import websocket
 
 from hyperliquid.utils.types import Any, Callable, Dict, List, NamedTuple, Optional, Subscription, Tuple, WsMsg
 
-ActiveSubscription = NamedTuple("ActiveSubscription", [("callback", Callable[[Any], None]), ("subscription_id", int)])
+#ActiveSubscription = NamedTuple("ActiveSubscription", [("callback", Callable[[Any], None]), ("subscription_id", int)])
+ActiveSubscription = NamedTuple("ActiveSubscription", [("callback", Callable[[Any], None]), ("callback_thread", threading.Event), ("subscription_id", int)])
 
+#self.channel_callbacks_running: Dict[str, threading.Event] = defaultdict(threading.Event)
+
+
+class WebSocketConnectionError(Exception):
+    pass
 
 def subscription_to_identifier(subscription: Subscription) -> str:
     if subscription["type"] == "allMids":
@@ -20,6 +26,10 @@ def subscription_to_identifier(subscription: Subscription) -> str:
         return f'trades:{subscription["coin"].lower()}'
     elif subscription["type"] == "userEvents":
         return "userEvents"
+    elif subscription["type"] == "orderUpdates":
+        return "orderUpdates"
+    elif subscription["type"] == "userFills":
+        return "userFills"
 
 
 def ws_msg_to_identifier(ws_msg: WsMsg) -> Optional[str]:
@@ -37,6 +47,10 @@ def ws_msg_to_identifier(ws_msg: WsMsg) -> Optional[str]:
             return f'trades:{trades[0]["coin"].lower()}'
     elif ws_msg["channel"] == "user":
         return "userEvents"
+    elif ws_msg["channel"] == "orderUpdates":
+        return "orderUpdates"
+    elif ws_msg["channel"] == "userFills":
+        return "userFills"
 
 
 class WebsocketManager(threading.Thread):
@@ -56,15 +70,19 @@ class WebsocketManager(threading.Thread):
 
     def send_ping(self):
         while True:
-            time.sleep(50)
-            logging.debug("Websocket sending ping")
-            self.ws.send(json.dumps({"method": "ping"}))
+            try:
+                time.sleep(48)
+                logging.debug("Websocket sending ping")
+                self.ws.send(json.dumps({"method": "ping"}))
+            except:
+                raise WebSocketConnectionError
 
     def on_message(self, _ws, message):
         if message == "Websocket connection established.":
             logging.debug(message)
             return
         logging.debug(f"on_message {message}")
+        #logging.info(f"on_message {message}")
         ws_msg: WsMsg = json.loads(message)
         identifier = ws_msg_to_identifier(ws_msg)
         if identifier == "pong":
@@ -78,13 +96,30 @@ class WebsocketManager(threading.Thread):
             print("Websocket message from an unexpected subscription:", message, identifier)
         else:
             for active_subscription in active_subscriptions:
-                active_subscription.callback(ws_msg)
+                #we check that there is no callback already running on this subscription
+                if not active_subscription.callback_thread.is_set():
+                    active_subscription.callback_thread.set()
+                    threading.Thread(target=self.handle_message, args=(active_subscription, ws_msg)).start()
+                else:
+                    logging.debug(f"Callback {active_subscription.callback.__name__} is already running, discarding msg: {ws_msg}")
+
+    def handle_message(self, active_subscription, ws_msg):
+        try:
+            active_subscription.callback(ws_msg)
+        finally:
+            active_subscription.callback_thread.clear()
 
     def on_open(self, _ws):
         logging.debug("on_open")
         self.ws_ready = True
         for subscription, active_subscription in self.queued_subscriptions:
             self.subscribe(subscription, active_subscription.callback, active_subscription.subscription_id)
+
+    def stop(self):
+        self.stop_event.set()  # Signal the ping_sender to stop
+        self.ws.close()  # Close the WebSocket connection
+        self.join()  # Wait for the main thread to finish
+        self.ping_sender.join()  # Wait for the ping_sender thread to finish
 
     def subscribe(
         self, subscription: Subscription, callback: Callable[[Any], None], subscription_id: Optional[int] = None
@@ -102,7 +137,7 @@ class WebsocketManager(threading.Thread):
                 # TODO: ideally the userEvent messages would include the user so that we can support multiplexing them
                 if len(self.active_subscriptions[identifier]) != 0:
                     raise NotImplementedError("Cannot subscribe to UserEvents multiple times")
-            self.active_subscriptions[identifier].append(ActiveSubscription(callback, subscription_id))
+            self.active_subscriptions[identifier].append(ActiveSubscription(callback, threading.Event(), subscription_id))
             self.ws.send(json.dumps({"method": "subscribe", "subscription": subscription}))
         return subscription_id
 
@@ -116,3 +151,4 @@ class WebsocketManager(threading.Thread):
             self.ws.send(json.dumps({"method": "unsubscribe", "subscription": subscription}))
         self.active_subscriptions[identifier] = new_active_subscriptions
         return len(active_subscriptions) != len(new_active_subscriptions)
+

@@ -22,15 +22,9 @@ Meta = TypedDict("Meta", {"universe": List[AssetInfo]})
 Side = Union[Literal["A"], Literal["B"]]
 SIDES: List[Side] = ["A", "B"]
 
-SpotAssetInfo = TypedDict("SpotAssetInfo", {"name": str, "tokens": List[int], "index": int, "isCanonical": bool})
-SpotTokenInfo = TypedDict(
-    "SpotTokenInfo",
-    {"name": str, "szDecimals": int, "weiDecimals": int, "index": int, "tokenId": str, "isCanonical": bool},
-)
+SpotAssetInfo = TypedDict("SpotAssetInfo", {"name": str, "tokens": List[int]})
+SpotTokenInfo = TypedDict("SpotTokenInfo", {"name": str, "szDecimals": int, "weiDecimals": int})
 SpotMeta = TypedDict("SpotMeta", {"universe": List[SpotAssetInfo], "tokens": List[SpotTokenInfo]})
-
-SpotAssetCtx = TypedDict("SpotAssetCtx", {"dayNtlVlm": str, "markPx": str, "midPx": Optional[str], "prevDayPx": str, "circulatingSupply": str, "coin": str})
-SpotMetaAndAssetCtxs = Tuple[SpotMeta, List[SpotAssetCtx]]
 
 AllMidsSubscription = TypedDict("AllMidsSubscription", {"type": Literal["allMids"]})
 L2BookSubscription = TypedDict("L2BookSubscription", {"type": Literal["l2Book"], "coin": str})
