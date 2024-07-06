@@ -97,7 +97,8 @@ class WebsocketManager(threading.Thread):
         else:
             for active_subscription in active_subscriptions:
                 #we check that there is no callback already running on this subscription
-                if not active_subscription.callback_thread.is_set():
+                #we only block for OB channel
+                if "l2Book" in identifier and not active_subscription.callback_thread.is_set():
                     active_subscription.callback_thread.set()
                     threading.Thread(target=self.handle_message, args=(active_subscription, ws_msg)).start()
                 else:
@@ -133,6 +134,7 @@ class WebsocketManager(threading.Thread):
         else:
             logging.debug("subscribing")
             identifier = subscription_to_identifier(subscription)
+            #TODO Check if I need to solve this with orderUpdates, it's probably bad to subscribe mutltiple times to the same channel
             if subscription["type"] == "userEvents":
                 # TODO: ideally the userEvent messages would include the user so that we can support multiplexing them
                 if len(self.active_subscriptions[identifier]) != 0:
@@ -151,4 +153,5 @@ class WebsocketManager(threading.Thread):
             self.ws.send(json.dumps({"method": "unsubscribe", "subscription": subscription}))
         self.active_subscriptions[identifier] = new_active_subscriptions
         return len(active_subscriptions) != len(new_active_subscriptions)
+
 
