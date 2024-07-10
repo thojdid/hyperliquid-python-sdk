@@ -98,11 +98,14 @@ class WebsocketManager(threading.Thread):
             for active_subscription in active_subscriptions:
                 #we check that there is no callback already running on this subscription
                 #we only block for OB channel
-                if "l2Book" in identifier and not active_subscription.callback_thread.is_set():
-                    active_subscription.callback_thread.set()
-                    threading.Thread(target=self.handle_message, args=(active_subscription, ws_msg)).start()
+                if "l2Book" in identifier:
+                    if not active_subscription.callback_thread.is_set():
+                        active_subscription.callback_thread.set()
+                        threading.Thread(target=self.handle_message, args=(active_subscription, ws_msg)).start()
+                    else:
+                        logging.debug(f"Callback {active_subscription.callback.__name__} is already running, discarding msg: {ws_msg}")
                 else:
-                    logging.debug(f"Callback {active_subscription.callback.__name__} is already running, discarding msg: {ws_msg}")
+                    self.handle_message(active_subscription, ws_msg)
 
     def handle_message(self, active_subscription, ws_msg):
         try:
