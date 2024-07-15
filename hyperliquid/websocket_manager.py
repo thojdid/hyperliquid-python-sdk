@@ -114,6 +114,7 @@ class WebsocketManager(threading.Thread):
                         active_subscription.callback_thread.set()
                         threading.Thread(target=self.handle_message, args=(active_subscription, ws_msg)).start()
                     else:
+
                         logging.debug(f"Callback {active_subscription.callback.__name__} is already running, discarding msg: {ws_msg}")
                 else:
                     self.handle_message(active_subscription, ws_msg)
@@ -148,11 +149,11 @@ class WebsocketManager(threading.Thread):
         else:
             logging.debug("subscribing")
             identifier = subscription_to_identifier(subscription)
-            #TODO Check if I need to solve this with orderUpdates, it's probably bad to subscribe mutltiple times to the same channel
-            if subscription["type"] == "userEvents":
-                # TODO: ideally the userEvent messages would include the user so that we can support multiplexing them
-                if len(self.active_subscriptions[identifier]) != 0:
-                    raise NotImplementedError("Cannot subscribe to UserEvents multiple times")
+            #TODO Check if I need to solve this, it's probably not great to subscribe mutltiple times to the same channel
+            #if subscription["type"] == "userEvents":
+            #    # TODO: ideally the userEvent messages would include the user so that we can support multiplexing them
+            #    if len(self.active_subscriptions[identifier]) != 0:
+            #        raise NotImplementedError("Cannot subscribe to UserEvents multiple times")
             self.active_subscriptions[identifier].append(ActiveSubscription(callback, threading.Event(), subscription_id))
             self.ws.send(json.dumps({"method": "subscribe", "subscription": subscription}))
         return subscription_id
