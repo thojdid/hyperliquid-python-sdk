@@ -172,6 +172,24 @@ class Info(API):
         """
         return cast(Meta, self.post("/info", {"type": "meta"}))
 
+    def meta_ctx(self) -> Meta:
+        """Retrieve exchange perp metadata
+
+        POST /info
+
+        Returns:
+            {
+                universe: [
+                    {
+                        name: str,
+                        szDecimals: int
+                    },
+                    ...
+                ]
+            }
+        """
+        return self.post("/info", {"type": "metaAndAssetCtxs"})
+
     def spot_meta(self) -> SpotMeta:
         """Retrieve exchange spot metadata
 
@@ -367,3 +385,4 @@ class Info(API):
             raise RuntimeError("Cannot call unsubscribe since skip_ws was used")
         else:
             return self.ws_manager.unsubscribe(subscription, subscription_id)
+
